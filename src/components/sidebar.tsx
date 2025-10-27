@@ -10,7 +10,7 @@ import logo from "../assets/logo.jpg";
 
 const Sidebar = ({ isOpen = true, onClose = () => {} }) => {
   const sidebarItems = [
-    { icon: UserPlus, label: "Add Artist", path: "/" },
+    { icon: UserPlus, label: "Add Artist", path: "/artist" },
     { icon: Disc3, label: "Add Albums", path: "/albums" },
     { icon: Music, label: "Add Tracks", path: "/tracks" },
     { icon: Tag, label: "Add Genre", path: "/genre" },

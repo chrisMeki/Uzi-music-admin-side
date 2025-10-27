@@ -1,337 +1,380 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { Music, Plus, X, Calendar, User, ImageIcon } from 'lucide-react';
-import Sidebar from '../components/sidebar'; // Adjust the import path as needed
+import { useState, useEffect } from 'react';
+import { Award, Calendar, Clock, Music, Plus, Star, Edit, Trash2, Menu, X } from 'lucide-react';
+import Sidebar from '../components/sidebar';
+import albumService from '../services/addalbum_service';
+import AlbumForm from '../components/formmodal';
+import defaultCover from '../assets/default.jpeg'; 
 
-interface Album {
-  id: number;
-  title: string;
-  artist: string;
-  year?: string;
-  genre?: string;
-  coverUrl?: string;
+interface Artist {
+  _id: string;
+  name: string;
+  profilePictureUrl?: string;
 }
 
-interface FormData {
+interface Plaque {
+  plaque_type: string;
+  plaque_image_url?: string;
+  plaque_price_range?: string;
+}
+
+interface Album {
+  id: string;
+  _id?: string;
   title: string;
-  artist: string;
-  year: string;
-  genre: string;
-  coverUrl: string;
+  artist: Artist | string;
+  description?: string;
+  cover_art?: string;
+  release_date?: string;
+  genre?: string;
+  track_count: number;
+  duration: number;
+  is_published: boolean;
+  is_featured: boolean;
+  publisher?: string;
+  plaqueArray: Plaque[];
+  copyright_info?: string;
+  credits?: string;
+  affiliation?: string;
 }
 
 export default function AlbumManager() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [formData, setFormData] = useState<FormData>({
-    title: '',
-    artist: '',
-    year: '',
-    genre: '',
-    coverUrl: ''
-  });
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
-  const genres = ['Rock', 'Pop', 'Hip Hop', 'Jazz', 'Classical', 'Electronic', 'Country', 'R&B', 'Metal', 'Indie'];
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const fetchAlbums = async () => {
+    try {
+      setLoading(true);
+      const response = await albumService.getAllAlbums();
 
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPreviewImage(result);
-        setFormData({
-          ...formData,
-          coverUrl: result
-        });
-      };
-      reader.readAsDataURL(file);
+      let albumsData: Album[] = [];
+
+      if (Array.isArray(response)) {
+        albumsData = response;
+      } else if (Array.isArray(response?.albums)) {
+        albumsData = response.albums;
+      } else if (Array.isArray(response?.data)) {
+        albumsData = response.data;
+      } else if (Array.isArray(response?.results)) {
+        albumsData = response.results;
+      } else {
+        setError("Unexpected data format received from server");
+        return;
+      }
+
+      // ✅ Normalize album IDs
+      albumsData = albumsData.map((album: any) => ({
+        ...album,
+        id: album.id || album._id
+      }));
+
+      setAlbums(albumsData);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching albums:", err);
+      setError("Failed to fetch albums. Please try again later.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (formData.title && formData.artist) {
-      setAlbums([...albums, { ...formData, id: Date.now() }]);
-      setFormData({ title: '', artist: '', year: '', genre: '', coverUrl: '' });
-      setPreviewImage(null);
+  const deleteAlbum = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this album?")) return;
+
+    try {
+      await albumService.deleteAlbum(id);
+      setAlbums(albums.filter(album => album.id !== id));
+    } catch (error: any) {
+      console.error("Error deleting album:", error);
+      setError(error.response?.data?.message || error.message || "Failed to delete album");
+    }
+  };
+
+  const editAlbum = (album: Album) => {
+    setEditingAlbum(album);
+    setIsFormOpen(true);
+  };
+
+  const handleFormSubmit = async (albumData: Album) => {
+    try {
+      if (editingAlbum) {
+        // Update existing album
+        const updatedAlbum = await albumService.updateAlbum(editingAlbum.id, albumData);
+        setAlbums(albums.map(album =>
+          album.id === editingAlbum.id ? { ...updatedAlbum, id: editingAlbum.id } : album
+        ));
+      } else {
+        // Create new album
+        const newAlbum = await albumService.createAlbum(albumData);
+        setAlbums([...albums, { ...newAlbum, id: newAlbum.id || newAlbum._id }]);
+      }
+      
       setIsFormOpen(false);
+      setEditingAlbum(null);
+      setError(null);
+    } catch (error: any) {
+      console.error("Error saving album:", error);
+      setError(error.response?.data?.message || error.message || "Failed to save album");
     }
   };
 
-  const deleteAlbum = (id: number) => {
-    setAlbums(albums.filter(album => album.id !== id));
+  const handleFormClose = () => {
+    setIsFormOpen(false);
+    setEditingAlbum(null);
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds) return "0 min";
+    return `${Math.floor(seconds / 60)} min`;
+  };
+
+  const getArtistName = (artist: Artist | string): string =>
+    typeof artist === "string" ? artist : artist?.name || "Unknown Artist";
+
+  // Fast image URL check - returns default immediately if no valid cover art
+  const getCoverArt = (albumId: string, cover_art?: string): string => {
+    // Immediate return if no cover art or if we know this image has errored
+    if (!cover_art || cover_art.trim() === '' || imageErrors.has(albumId)) {
+      return defaultCover;
+    }
+    return cover_art;
+  };
+
+  const handleImageError = (albumId: string) => {
+    // Add to error set for fast fallback on re-renders
+    setImageErrors(prev => new Set(prev).add(albumId));
+  };
+
+  const renderAlbums = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <p className="text-gray-500 mt-4">Loading albums...</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl">
+          {error}
+        </div>
+      );
+    }
+
+    if (!albums.length) {
+      return (
+        <div className="text-center py-12">
+          <Music className="w-20 h-20 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">No albums found. Start adding music!</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+        {albums.map((album) => (
+          <div
+            key={album.id}
+            className="bg-white rounded-xl lg:rounded-2xl shadow-md hover:shadow-lg lg:hover:shadow-2xl transition transform hover:scale-[1.02] lg:hover:scale-105 overflow-hidden cursor-pointer group"
+          >
+            <div className="relative h-40 lg:h-48 bg-gradient-to-br from-red-400 to-red-600">
+              <img
+                src={getCoverArt(album.id, album.cover_art)}
+                alt={album.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={() => handleImageError(album.id)}
+              />
+
+              <div className="absolute top-2 right-2 lg:top-3 lg:right-3 flex gap-1 lg:gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                <button
+                  onClick={(e) => { e.stopPropagation(); editAlbum(album); }}
+                  className="bg-white text-blue-600 p-1.5 lg:p-2 rounded-full hover:bg-blue-50 transition-colors shadow-md hover:shadow-lg"
+                  title="Edit Album"
+                >
+                  <Edit className="w-3 h-3 lg:w-4 lg:h-4" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteAlbum(album.id); }}
+                  className="bg-white text-red-600 p-1.5 lg:p-2 rounded-full hover:bg-red-50 transition-colors shadow-md hover:shadow-lg"
+                  title="Delete Album"
+                >
+                  <Trash2 className="w-3 h-3 lg:w-4 lg:h-4" />
+                </button>
+              </div>
+
+              {album.is_featured && (
+                <div className="absolute top-2 left-2 lg:top-3 lg:left-3 bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+                  <Star className="w-3 h-3" />
+                  Featured
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 lg:p-6">
+              <h3 className="text-lg lg:text-xl font-bold mb-1 truncate">{album.title}</h3>
+              <p className="text-gray-600 text-sm lg:text-base mb-2 truncate">
+                Artist: {getArtistName(album.artist)}
+              </p>
+              <p className="text-gray-500 text-xs lg:text-sm line-clamp-2 mb-3">
+                {album.description || "No description available"}
+              </p>
+
+              {Array.isArray(album.plaqueArray) && album.plaqueArray.length > 0 && (
+                <div className="flex flex-wrap gap-1 lg:gap-2 mb-3">
+                  {album.plaqueArray.slice(0, 2).map((plaque, i) => (
+                    <div
+                      key={`${plaque.plaque_type}-${i}`}
+                      className="flex items-center gap-1 bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-semibold"
+                    >
+                      <Award className="w-3 h-3" />
+                      {plaque.plaque_type}
+                    </div>
+                  ))}
+                  {album.plaqueArray.length > 2 && (
+                    <div className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-semibold">
+                      +{album.plaqueArray.length - 2}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 lg:gap-3 text-xs lg:text-sm text-gray-500 mb-3">
+                {album.release_date && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {new Date(album.release_date).getFullYear()}
+                  </span>
+                )}
+                {album.track_count > 0 && <span>{album.track_count} Tracks</span>}
+                {album.duration > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {formatDuration(album.duration)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center text-xs text-gray-400">
+                {album.is_published
+                  ? <span className="text-green-600 font-semibold">Published</span>
+                  : <span>Draft</span>}
+                {album.publisher && <span className="truncate max-w-[100px] lg:max-w-none">{album.publisher}</span>}
+              </div>
+
+              <div className="flex gap-2 mt-3 lg:mt-4 pt-3 lg:pt-4 border-t border-gray-100">
+                <button
+                  onClick={(e) => { e.stopPropagation(); editAlbum(album); }}
+                  className="flex-1 bg-blue-600 text-white py-2 px-2 lg:px-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1 lg:gap-2 text-xs lg:text-sm font-medium"
+                >
+                  <Edit className="w-3 h-3 lg:w-4 lg:h-4" />
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteAlbum(album.id); }}
+                  className="flex-1 bg-red-600 text-white py-2 px-2 lg:px-3 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-1 lg:gap-2 text-xs lg:text-sm font-medium"
+                >
+                  <Trash2 className="w-3 h-3 lg:w-4 lg:h-4" />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-red-100 flex">
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {/* Sidebar - Overlay on mobile, always visible on desktop */}
+      <div className={`
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0 transition-transform duration-300 ease-in-out
+        fixed lg:relative inset-y-0 left-0 z-50
+        w-64 lg:w-72 xl:w-80
+      `}>
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)}
+        />
+      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
-        {/* Mobile Header */}
-        <div className="lg:hidden bg-white border-b border-gray-200 p-4">
+      {/* Mobile Header with Hamburger */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white shadow-sm border-b border-gray-200">
+        <div className="flex items-center justify-between p-4">
           <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors z-50"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-        </div>
-
-        <div className="p-4 lg:p-8 min-h-[calc(100vh-80px)] lg:min-h-screen">
-          <div className="max-w-6xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-8 lg:mb-12 animate-fade-in">
-              <div className="flex items-center justify-center mb-4">
-                <Music className="w-12 h-12 lg:w-16 lg:h-16 text-red-600 animate-pulse" />
-              </div>
-              <h1 className="text-3xl lg:text-5xl font-bold text-gray-900 mb-2 tracking-tight">
-                Album Collection
-              </h1>
-              <p className="text-gray-600 text-base lg:text-lg">Curate your musical journey</p>
-            </div>
-
-            {/* Add Album Button */}
-            <div className="flex justify-center mb-6 lg:mb-8">
-              <button
-                onClick={() => setIsFormOpen(true)}
-                className="group bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 lg:px-8 lg:py-4 rounded-2xl shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-300 flex items-center gap-3 font-semibold text-base lg:text-lg"
-              >
-                <Plus className="w-5 h-5 lg:w-6 lg:h-6 group-hover:rotate-90 transition-transform duration-300" />
-                Add New Album
-              </button>
-            </div>
-
-            {/* Form Modal */}
-            {isFormOpen && (
-              <div className="fixed inset-0 bg bg-opacity-50 flex items-start justify-center ">
-                <div className="bg-white rounded-2xl lg:rounded-3xl shadow-2xl max-w-2xl w-full p-6 lg:p-8 transform animate-scale-in max-h-[90vh] overflow-y-auto">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl lg:text-3xl font-bold text-gray-900">Add New Album</h2>
-                    <button
-                      onClick={() => setIsFormOpen(false)}
-                      className="text-gray-400 hover:text-gray-600 hover:rotate-90 transition-all duration-300"
-                    >
-                      <X className="w-6 h-6 lg:w-8 lg:h-8" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="group">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Album Title *
-                      </label>
-                      <input
-                        type="text"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-300 outline-none"
-                        placeholder="Enter album title"
-                      />
-                    </div>
-
-                    <div className="group">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <User className="w-4 h-4" />
-                        Artist Name *
-                      </label>
-                      <input
-                        type="text"
-                        name="artist"
-                        value={formData.artist}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-300 outline-none"
-                        placeholder="Enter artist name"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          Release Year
-                        </label>
-                        <input
-                          type="number"
-                          name="year"
-                          value={formData.year}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-300 outline-none"
-                          placeholder="2024"
-                          min={1900}
-                          max={2025}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Genre
-                        </label>
-                        <select
-                          name="genre"
-                          value={formData.genre}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-300 outline-none bg-white"
-                        >
-                          <option value="">Select genre</option>
-                          {genres.map(genre => (
-                            <option key={genre} value={genre}>{genre}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <ImageIcon className="w-4 h-4" />
-                        Cover Image
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                          id="cover-upload"
-                        />
-                        <label
-                          htmlFor="cover-upload"
-                          className="block w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-red-500 transition-all duration-300 cursor-pointer text-center bg-gray-50 hover:bg-red-50"
-                        >
-                          {previewImage ? (
-                            <div className="flex items-center justify-center gap-3">
-                              <img src={previewImage} alt="Preview" className="h-16 w-16 object-cover rounded-lg" />
-                              <span className="text-sm text-gray-600">Click to change image</span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-2 py-2">
-                              <ImageIcon className="w-8 h-8 text-gray-400" />
-                              <span className="text-sm text-gray-600">Click to upload album cover</span>
-                              <span className="text-xs text-gray-400">PNG, JPG up to 10MB</span>
-                            </div>
-                          )}
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col lg:flex-row gap-4 pt-4">
-                      <button
-                        type="submit"
-                        className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-                      >
-                        Add Album
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsFormOpen(false)}
-                        className="px-8 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-all duration-300"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Albums Grid */}
-            {albums.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                {albums.map((album, index) => (
-                  <div
-                    key={album.id}
-                    className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-300 overflow-hidden group"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div className="relative h-40 lg:h-48 bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center overflow-hidden">
-                      {album.coverUrl ? (
-                        <img
-                          src={album.coverUrl}
-                          alt={album.title}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        />
-                      ) : (
-                        <Music className="w-16 h-16 lg:w-20 lg:h-20 text-white opacity-50" />
-                      )}
-                      <button
-                        onClick={() => deleteAlbum(album.id)}
-                        className="absolute top-3 right-3 bg-white text-red-600 p-2 rounded-full opacity-0 group-hover:opacity-100 transform scale-0 group-hover:scale-100 transition-all duration-300 hover:bg-red-50"
-                      >
-                        <X className="w-4 h-4 lg:w-5 lg:h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4 lg:p-6">
-                      <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-1 truncate">
-                        {album.title}
-                      </h3>
-                      <p className="text-gray-600 mb-3 truncate">{album.artist}</p>
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                        {album.year && <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{album.year}</span>}
-                        {album.genre && <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full font-medium">{album.genre}</span>}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 lg:py-16">
-                <Music className="w-16 h-16 lg:w-24 lg:h-24 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-base lg:text-lg">No albums yet. Start building your collection!</p>
-              </div>
-            )}
+          <div className="flex items-center gap-2">
+            <Music className="w-7 h-7 text-red-600" />
+            <span className="font-bold text-lg">Albums</span>
           </div>
+          <div className="w-10"></div> {/* Spacer for balance */}
         </div>
       </div>
 
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+      {/* Overlay for mobile when sidebar is open */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
+      {/* Main Content */}
+      <div className="flex-1 lg:ml-0 transition-all duration-300">
+        <div className="p-4 lg:p-8 max-w-6xl mx-auto lg:mt-0 mt-16">
+          {/* Desktop Header */}
+          <div className="hidden lg:block text-center mb-8 lg:mb-10">
+            <Music className="w-14 h-14 lg:w-16 lg:h-16 text-red-600 mx-auto mb-3 lg:mb-4" />
+            <h1 className="text-3xl lg:text-4xl font-bold">Album Collection</h1>
+            <p className="text-gray-600 text-sm lg:text-base">Curate your musical journey</p>
+          </div>
 
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out;
-        }
+          {/* Mobile Header Replacement */}
+          <div className="lg:hidden mb-6">
+            <h1 className="text-2xl font-bold text-center text-gray-800">Album Collection</h1>
+            <p className="text-gray-600 text-center text-sm mt-1">Curate your musical journey</p>
+          </div>
 
-        .animate-scale-in {
-          animation: scale-in 0.3s ease-out;
-        }
-      `}</style>
+          <div className="flex justify-center mb-6">
+            <button
+              onClick={() => {
+                setEditingAlbum(null);
+                setIsFormOpen(true);
+              }}
+              className="bg-red-600 text-white px-6 py-3 lg:px-8 lg:py-3 rounded-xl lg:rounded-2xl hover:bg-red-700 transition flex items-center gap-3 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 w-full lg:w-auto justify-center text-sm lg:text-base"
+            >
+              <Plus className="w-5 h-5 lg:w-6 lg:h-6" />
+              <span>Add New Album</span>
+            </button>
+          </div>
+
+          {isFormOpen && (
+            <AlbumForm
+              onSubmit={handleFormSubmit}
+              onClose={handleFormClose} 
+              editingAlbum={null}              
+            />
+          )}
+
+          {renderAlbums()}
+        </div>
+      </div>
     </div>
   );
 }
