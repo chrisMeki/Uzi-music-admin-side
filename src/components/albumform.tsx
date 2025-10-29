@@ -19,7 +19,12 @@ interface AlbumFormProps {
 interface Genre { _id: string; name: string; }
 interface Artist { _id: string; name: string; }
 
-const plaqueTypes = ['Gold', 'Platinum', 'Diamond', 'Multi-Platinum', 'Silver', 'Ruby'];
+const plaqueTypes = ['gold', 'silver', 'emerald', 'sapphire', 'crimson', 'wooden'];
+
+// Helper function to capitalize plaque type for display
+const capitalizePlaqueType = (type: string): string => {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+};
 
 export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumFormProps) {
   const [formData, setFormData] = useState<FormData>({
@@ -31,7 +36,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
   const [plaqueArray, setPlaqueArray] = useState<Plaque[]>([]);
   const [currentPlaque, setCurrentPlaque] = useState<Plaque>({ plaque_type: '', plaque_image_url: '', plaque_price_range: "" });
   const [plaquePreviewImage, setPlaquePreviewImage] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
   const [genres, setGenres] = useState<Genre[]>([]);
@@ -40,6 +45,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
   const [loadingArtists, setLoadingArtists] = useState<boolean>(false);
   const [durationInput, setDurationInput] = useState<string>('');
   const [durationUnit, setDurationUnit] = useState<'seconds' | 'minutes'>('seconds');
+  const [submitLoading, setSubmitLoading] = useState<boolean>(false);
 
   useEffect(() => {
     loadGenres();
@@ -52,6 +58,9 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
       const artistName = typeof editingAlbum.artist === 'string' 
         ? artists.find(a => a._id === artistId)?.name || ''
         : (editingAlbum.artist as any).name || '';
+      
+      const genreId = editingAlbum.genre_id || '';
+      const genreName = editingAlbum.genre || '';
       
       let durationValue = '';
       
@@ -72,8 +81,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
         artist: artistId, 
         artist_name: artistName,
         release_date: editingAlbum.release_date || '',
-        genre: editingAlbum.genre || '', 
-        genre_id: editingAlbum.genre_id || '', 
+        genre: genreName, 
+        genre_id: genreId, 
         cover_art: editingAlbum.cover_art || '',
         description: editingAlbum.description || '', 
         track_count: editingAlbum.track_count || 0,
@@ -128,19 +137,22 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
-    if (name === 'artist') {
-      const selectedArtist = artists.find(artist => artist._id === value);
+    
+    if (name === 'artist_name') {
+      // Find artist by name and set both name and ID
+      const selectedArtist = artists.find(artist => artist.name === value);
       setFormData({ 
         ...formData, 
-        artist: value,
-        artist_name: selectedArtist ? selectedArtist.name : ''
+        artist: selectedArtist ? selectedArtist._id : '',
+        artist_name: value
       });
-    } else if (name === 'genre_id') {
-      const selectedGenre = genres.find(genre => genre._id === value);
+    } else if (name === 'genre') {
+      // Find genre by name and set both name and ID
+      const selectedGenre = genres.find(genre => genre.name === value);
       setFormData({ 
         ...formData, 
-        genre_id: value, 
-        genre: selectedGenre ? selectedGenre.name : '' 
+        genre_id: selectedGenre ? selectedGenre._id : '', 
+        genre: value 
       });
     } else {
       setFormData({
@@ -242,28 +254,42 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
     setDurationInput('');
     setDurationUnit('seconds');
     setError(null);
+    setSubmitLoading(false);
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitLoading(true);
     setError(null);
     try {
       if (!formData.title || !formData.artist) throw new Error('Title and Artist are required');
+      
+      // Create the album data with proper structure for backend
       const albumData = { 
-        ...formData, 
-        plaqueArray: [...plaqueArray],
-        // Ensure we're sending the artist object with both id and name
-        artist: {
-          _id: formData.artist,
-          name: formData.artist_name
-        }
+        title: formData.title,
+        artist: formData.artist, // Send only the artist ID as string
+        release_date: formData.release_date,
+        genre: formData.genre_id, // Send genre ID instead of genre name
+        genre_id: formData.genre_id,
+        cover_art: formData.cover_art,
+        description: formData.description,
+        track_count: formData.track_count,
+        copyright_info: formData.copyright_info,
+        publisher: formData.publisher,
+        credits: formData.credits,
+        affiliation: formData.affiliation,
+        duration: formData.duration,
+        is_published: formData.is_published,
+        is_featured: formData.is_featured,
+        plaqueArray: plaqueArray // Make sure this is included
       };
+      
+      console.log('Submitting album data:', albumData);
+      console.log('Plaques being submitted:', plaqueArray);
       onSubmit(albumData as unknown as Album);
     } catch (error: any) {
       setError(error.message || 'Failed to save album');
-    } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
@@ -284,6 +310,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
             <button 
               onClick={() => { onClose(); resetForm(); }} 
               className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              disabled={submitLoading}
             >
               <X className="w-6 h-6 text-slate-400" />
             </button>
@@ -311,11 +338,11 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                     onChange={(e) => handleImageUpload(e, 'cover')} 
                     className="hidden" 
                     id="cover-upload" 
-                    disabled={uploading} 
+                    disabled={uploading || submitLoading} 
                   />
                   <label 
                     htmlFor="cover-upload" 
-                    className={`block cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`block cursor-pointer ${(uploading || submitLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {uploading ? (
                       <div className="aspect-square bg-slate-50 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-slate-300">
@@ -336,6 +363,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                             setFormData({ ...formData, cover_art: '' });
                           }} 
                           className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          disabled={submitLoading}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -360,7 +388,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                       name="is_published" 
                       checked={formData.is_published} 
                       onChange={handleInputChange}
-                      className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" 
+                      disabled={submitLoading}
+                      className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50" 
                     />
                   </label>
                   <label className="flex items-center justify-between cursor-pointer">
@@ -370,7 +399,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                       name="is_featured" 
                       checked={formData.is_featured} 
                       onChange={handleInputChange}
-                      className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" 
+                      disabled={submitLoading}
+                      className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50" 
                     />
                   </label>
                 </div>
@@ -395,7 +425,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         value={formData.title} 
                         onChange={handleInputChange} 
                         required
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder="Enter album title" 
                       />
                     </div>
@@ -405,17 +436,17 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           Artist <span className="text-red-500">*</span>
                         </label>
                         <select 
-                          name="artist" 
-                          value={formData.artist} 
+                          name="artist_name" 
+                          value={formData.artist_name} 
                           onChange={handleInputChange} 
                           required 
-                          disabled={loadingArtists}
-                          className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                          disabled={loadingArtists || submitLoading}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         >
                           <option value="">Select artist</option>
                           {artists.map(artist => (
-                            <option key={artist._id} value={artist._id}>
-                              {artist.name} (ID: {artist._id})
+                            <option key={artist._id} value={artist.name}>
+                              {artist.name}
                             </option>
                           ))}
                         </select>
@@ -423,8 +454,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
                             <p className="text-xs text-slate-600">
                               <strong>Selected Artist:</strong><br />
-                              Name: {formData.artist_name}<br />
-                              ID: {formData.artist}
+                              Name: {formData.artist_name}
                             </p>
                           </div>
                         )}
@@ -432,16 +462,16 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">Genre</label>
                         <select 
-                          name="genre_id" 
-                          value={formData.genre_id} 
+                          name="genre" 
+                          value={formData.genre} 
                           onChange={handleInputChange} 
-                          disabled={loadingGenres}
-                          className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                          disabled={loadingGenres || submitLoading}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         >
                           <option value="">Select genre</option>
                           {genres.map(genre => (
-                            <option key={genre._id} value={genre._id}>
-                              {genre.name} (ID: {genre._id})
+                            <option key={genre._id} value={genre.name}>
+                              {genre.name}
                             </option>
                           ))}
                         </select>
@@ -449,8 +479,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
                             <p className="text-xs text-slate-600">
                               <strong>Selected Genre:</strong><br />
-                              Name: {formData.genre}<br />
-                              ID: {formData.genre_id}
+                              Name: {formData.genre}
                             </p>
                           </div>
                         )}
@@ -463,7 +492,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         value={formData.description} 
                         onChange={handleInputChange} 
                         rows={4}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none disabled:opacity-50"
                         placeholder="Album description" 
                       />
                     </div>
@@ -485,7 +515,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         value={formData.track_count} 
                         onChange={handleInputChange} 
                         min="0"
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder="0" 
                       />
                     </div>
@@ -495,7 +526,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         type="text" 
                         value={durationInput} 
                         onChange={handleDurationChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder={durationUnit === 'minutes' ? '3:45' : '225'} 
                       />
                     </div>
@@ -504,7 +536,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                       <select 
                         value={durationUnit} 
                         onChange={handleDurationUnitChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                       >
                         <option value="seconds">Seconds</option>
                         <option value="minutes">Minutes</option>
@@ -517,7 +550,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         name="release_date" 
                         value={formData.release_date} 
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                       />
                     </div>
                   </div>
@@ -537,7 +571,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         name="copyright_info" 
                         value={formData.copyright_info} 
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder="© 2025" 
                       />
                     </div>
@@ -548,7 +583,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         name="publisher" 
                         value={formData.publisher} 
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder="Publisher name" 
                       />
                     </div>
@@ -559,7 +595,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         name="credits" 
                         value={formData.credits} 
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder="Production credits" 
                       />
                     </div>
@@ -570,7 +607,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         name="affiliation" 
                         value={formData.affiliation} 
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        disabled={submitLoading}
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         placeholder="Affiliation" 
                       />
                     </div>
@@ -592,10 +630,15 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           name="plaque_type" 
                           value={currentPlaque.plaque_type} 
                           onChange={handlePlaqueInputChange}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+                          disabled={submitLoading}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm disabled:opacity-50"
                         >
-                          <option value="">Select type</option>
-                          {plaqueTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                          <option value="">Select plaque type</option>
+                          {plaqueTypes.map(type => (
+                            <option key={type} value={type}>
+                              {capitalizePlaqueType(type)}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -604,7 +647,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           name="plaque_price_range" 
                           value={currentPlaque.plaque_price_range} 
                           onChange={handlePlaqueInputChange}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+                          disabled={submitLoading}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm disabled:opacity-50"
                           placeholder="Price range" 
                         />
                       </div>
@@ -615,11 +659,11 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           onChange={(e) => handleImageUpload(e, 'plaque')} 
                           className="hidden" 
                           id="plaque-upload" 
-                          disabled={uploading} 
+                          disabled={uploading || submitLoading} 
                         />
                         <label 
                           htmlFor="plaque-upload" 
-                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors text-sm ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors text-sm ${(uploading || submitLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           {uploading ? (
                             <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
@@ -634,7 +678,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                     <button 
                       type="button" 
                       onClick={addPlaque} 
-                      disabled={!currentPlaque.plaque_type || !currentPlaque.plaque_image_url || uploading}
+                      disabled={!currentPlaque.plaque_type || !currentPlaque.plaque_image_url || uploading || submitLoading}
                       className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
                     >
                       <Plus className="w-4 h-4" /> Add Plaque
@@ -644,6 +688,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                   {/* Plaque List */}
                   {plaqueArray.length > 0 && (
                     <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Added Plaques ({plaqueArray.length})</h4>
                       {plaqueArray.map((plaque, index) => (
                         <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                           {plaque.plaque_image_url && (
@@ -652,24 +697,26 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                               alt={plaque.plaque_type} 
                               className="w-12 h-12 object-cover rounded"
                               onError={(e) => {
-                                // Fallback if image fails to load
                                 (e.target as HTMLImageElement).style.display = 'none';
                               }}
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-900 text-sm">{plaque.plaque_type}</p>
+                            <p className="font-medium text-slate-900 text-sm">
+                              {capitalizePlaqueType(plaque.plaque_type)}
+                            </p>
                             <p className="text-xs text-slate-600 truncate">{plaque.plaque_price_range}</p>
                             {plaque.plaque_image_url && (
                               <p className="text-xs text-slate-500 truncate mt-1">
-                                Image URL: {plaque.plaque_image_url}
+                                Image URL: {plaque.plaque_image_url.substring(0, 50)}...
                               </p>
                             )}
                           </div>
                           <button 
                             type="button" 
                             onClick={() => removePlaque(index)} 
-                            className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded transition-colors"
+                            disabled={submitLoading}
+                            className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -685,13 +732,13 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
             <div className="flex gap-3 pt-4 border-t border-slate-200">
               <button 
                 type="submit" 
-                disabled={loading || uploading}
+                disabled={submitLoading || uploading}
                 className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-lg font-semibold transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loading ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> {editingAlbum ? 'Updating...' : 'Creating...'}</>
+                {submitLoading ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> {editingAlbum ? 'Updating Album...' : 'Creating Album...'}</>
                 ) : uploading ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> Uploading...</>
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Uploading Image...</>
                 ) : (
                   editingAlbum ? 'Update Album' : 'Create Album'
                 )}
@@ -699,7 +746,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
               <button 
                 type="button" 
                 onClick={() => { onClose(); resetForm(); }} 
-                disabled={loading || uploading}
+                disabled={submitLoading || uploading}
                 className="px-6 py-3 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-semibold transition-colors disabled:opacity-50"
               >
                 Cancel

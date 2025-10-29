@@ -50,10 +50,10 @@ export default function GenreManagementScreen() {
       }
       
       // ✅ Ensure all genres have proper id and name
-      const formattedGenres = genresData.map((genre: any, index) => ({
-        id: genre.id?.toString() || genre._id?.toString() || `genre-${index}-${Date.now()}`,
+      const formattedGenres = genresData.map((genre: any) => ({
+        id: genre.id?.toString() || genre._id?.toString(),
         name: genre.name || genre.genreName || 'Unknown Genre'
-      }));
+      })).filter(genre => genre.id); // Filter out genres without proper IDs
       
       setGenres(formattedGenres);
     } catch (err: any) {
@@ -77,21 +77,21 @@ export default function GenreManagementScreen() {
       // ✅ Handle different response structures for create
       let createdGenre: Genre;
       
-      if (response && response.id) {
+      if (response && (response.id || response._id)) {
         createdGenre = {
-          id: response.id.toString(),
+          id: (response.id || response._id).toString(),
           name: response.name || genreName.trim()
         };
       } else if (response && response.data) {
         createdGenre = {
-          id: response.data.id?.toString() || `genre-${Date.now()}`,
+          id: (response.data.id || response.data._id)?.toString(),
           name: response.data.name || genreName.trim()
         };
       } else {
-        createdGenre = {
-          id: `genre-${Date.now()}`,
-          name: genreName.trim()
-        };
+        // If no ID returned, refetch all genres to get the updated list
+        await fetchGenres();
+        setGenreName('');
+        return;
       }
       
       setGenres(prevGenres => [...prevGenres, createdGenre]);
@@ -139,6 +139,17 @@ export default function GenreManagementScreen() {
   const handleUpdate = async (id: string) => {
     if (!editingName.trim()) return;
 
+    // ✅ Validate that the ID is a valid MongoDB ObjectId format
+    // MongoDB ObjectIds are 24-character hex strings
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+    
+    if (!isValidObjectId) {
+      setError('Invalid genre ID format. Please refresh the page and try again.');
+      console.error('Invalid genre ID:', id);
+      cancelEditing();
+      return;
+    }
+
     try {
       setError('');
       setLoading(true);
@@ -148,21 +159,22 @@ export default function GenreManagementScreen() {
       // ✅ Handle different response structures for update
       let updatedGenreData: Genre;
       
-      if (response && response.id) {
+      if (response && (response.id || response._id)) {
         updatedGenreData = {
-          id: response.id.toString(),
+          id: (response.id || response._id).toString(),
           name: response.name || editingName.trim()
         };
       } else if (response && response.data) {
         updatedGenreData = {
-          id: response.data.id?.toString() || id,
+          id: (response.data.id || response.data._id)?.toString() || id,
           name: response.data.name || editingName.trim()
         };
       } else {
-        updatedGenreData = {
-          id: id,
-          name: editingName.trim()
-        };
+        // If response structure is unexpected, refetch all genres
+        await fetchGenres();
+        setEditingId(null);
+        setEditingName('');
+        return;
       }
       
       setGenres(prevGenres => 
@@ -247,8 +259,6 @@ export default function GenreManagementScreen() {
                 </div>
               )}
 
-              
-
               {/* Create Genre Form */}
               <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 lg:p-8 mb-6 border border-red-100">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Create New Genre</h2>
@@ -302,7 +312,7 @@ export default function GenreManagementScreen() {
                   <div className="space-y-3">
                     {genres.map((genre) => (
                       <div
-                        key={genre.id} // ✅ Unique key prop
+                        key={genre.id}
                         className="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-white rounded-lg border border-red-100 hover:border-red-300 hover:shadow-md transition-all"
                       >
                         {editingId === genre.id ? (

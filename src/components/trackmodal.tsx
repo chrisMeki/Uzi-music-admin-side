@@ -211,10 +211,10 @@ export default function TrackModal({
         }
       }
 
+      // FIXED: Send the album ID in the 'album' field, not as 'albumId'
       const trackData = {
         title: title.trim(),
-        album: album.trim(),
-        albumId: selectedAlbumId,
+        album: selectedAlbumId, // Send the ObjectId here, not the title
         durationMs: parseInt(durationMs) || 0,
         trackNumber: parseInt(trackNumber) || 1,
         featuredArtists: featuredArtists.trim(),
@@ -234,7 +234,12 @@ export default function TrackModal({
       let savedTrack: { id: any; _id: any; };
 
       if (editingTrack) {
-        const trackId = editingTrack._id || editingTrack.id.toString();
+        // FIXED: Use the MongoDB _id for updates, not the numeric id
+        const trackId = editingTrack._id;
+        if (!trackId) {
+          throw new Error('Cannot update track: No valid _id found');
+        }
+        
         const response = await trackService.update(trackId, trackData);
         savedTrack = response.data || response;
       } else {
@@ -242,10 +247,16 @@ export default function TrackModal({
         savedTrack = response.data || response;
       }
 
+      // For the frontend display, we still want the album title
+      const selectedAlbum = albums.find(alb => alb._id === selectedAlbumId);
+      const albumTitle = selectedAlbum?.title || album;
+
       const newTrack: Track = {
         id: savedTrack.id || savedTrack._id || Date.now(),
         _id: savedTrack._id || savedTrack.id,
-        ...trackData
+        ...trackData,
+        album: albumTitle, // Use the title for frontend display
+        albumId: selectedAlbumId // Store the ID separately for future edits
       };
 
       onTrackSaved(newTrack, !!editingTrack);

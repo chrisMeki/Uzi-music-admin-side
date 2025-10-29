@@ -17,7 +17,7 @@ export default function UpdateModal({ show, onClose, onConfirm, artist, loading 
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0  bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl p-6 lg:p-8 max-w-md w-full">
         <div className="text-center">
           <div className="w-16 h-16 lg:w-20 lg:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">

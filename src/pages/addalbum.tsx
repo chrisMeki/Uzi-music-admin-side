@@ -297,13 +297,8 @@ export default function AlbumManager() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-red-100 flex">
-      {/* Sidebar - Overlay on mobile, always visible on desktop */}
-      <div className={`
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 transition-transform duration-300 ease-in-out
-        fixed lg:relative inset-y-0 left-0 z-50
-        w-64 lg:w-72 xl:w-80
-      `}>
+      {/* Sidebar - Fixed position */}
+      <div className="fixed left-0 top-0 h-full z-40">
         <Sidebar 
           isOpen={sidebarOpen} 
           onClose={() => setSidebarOpen(false)}
@@ -330,49 +325,50 @@ export default function AlbumManager() {
       {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Main Content */}
-      <div className="flex-1 lg:ml-0 transition-all duration-300">
-        <div className="p-4 lg:p-8 max-w-6xl mx-auto lg:mt-0 mt-16">
-          {/* Desktop Header */}
-          <div className="hidden lg:block text-center mb-8 lg:mb-10">
-            <Music className="w-14 h-14 lg:w-16 lg:h-16 text-red-600 mx-auto mb-3 lg:mb-4" />
-            <h1 className="text-3xl lg:text-4xl font-bold">Album Collection</h1>
-            <p className="text-gray-600 text-sm lg:text-base">Curate your musical journey</p>
+      {/* Main Content - Scrollable area */}
+      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'lg:ml-100' : 'lg:ml-60'}`}>
+        <div className="overflow-auto h-screen">
+          <div className="p-4 lg:p-8 max-w-6xl mx-auto lg:mt-0 mt-16">
+            {/* Desktop Header */}
+            <div className="hidden lg:block text-center mb-8 lg:mb-10">
+              <Music className="w-14 h-14 lg:w-16 lg:h-16 text-red-600 mx-auto mb-3 lg:mb-4" />
+              <h1 className="text-3xl lg:text-4xl font-bold">Album Collection</h1>
+              <p className="text-gray-600 text-sm lg:text-base">Curate your musical journey</p>
+            </div>
+
+            {/* Mobile Header Replacement */}
+            <div className="lg:hidden mb-6">
+              <h1 className="text-2xl font-bold text-center text-gray-800">Album Collection</h1>
+              <p className="text-gray-600 text-center text-sm mt-1">Curate your musical journey</p>
+            </div>
+
+            <div className="flex justify-center mb-6">
+              <button
+                onClick={() => {
+                  setEditingAlbum(null);
+                  setIsFormOpen(true);
+                }}
+                className="bg-red-600 text-white px-6 py-3 lg:px-8 lg:py-3 rounded-xl lg:rounded-2xl hover:bg-red-700 transition flex items-center gap-3 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 w-full lg:w-auto justify-center text-sm lg:text-base"
+              >
+                <Plus className="w-5 h-5 lg:w-6 lg:h-6" />
+                <span>Add New Album</span>
+              </button>
+            </div>
+
+            {isFormOpen && (
+              <AlbumForm
+                onSubmit={handleFormSubmit}
+                onClose={handleFormClose} editingAlbum={null}                
+              />
+            )}
+
+            {renderAlbums()}
           </div>
-
-          {/* Mobile Header Replacement */}
-          <div className="lg:hidden mb-6">
-            <h1 className="text-2xl font-bold text-center text-gray-800">Album Collection</h1>
-            <p className="text-gray-600 text-center text-sm mt-1">Curate your musical journey</p>
-          </div>
-
-          <div className="flex justify-center mb-6">
-            <button
-              onClick={() => {
-                setEditingAlbum(null);
-                setIsFormOpen(true);
-              }}
-              className="bg-red-600 text-white px-6 py-3 lg:px-8 lg:py-3 rounded-xl lg:rounded-2xl hover:bg-red-700 transition flex items-center gap-3 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 w-full lg:w-auto justify-center text-sm lg:text-base"
-            >
-              <Plus className="w-5 h-5 lg:w-6 lg:h-6" />
-              <span>Add New Album</span>
-            </button>
-          </div>
-
-          {isFormOpen && (
-            <AlbumForm
-              onSubmit={handleFormSubmit}
-              onClose={handleFormClose} 
-              editingAlbum={null}              
-            />
-          )}
-
-          {renderAlbums()}
         </div>
       </div>
     </div>

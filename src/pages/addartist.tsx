@@ -76,6 +76,44 @@ export default function AddArtistAdmin() {
   const [users, setUsers] = useState<User[]>([]);
   const [loadingGenres, setLoadingGenres] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingArtists, setLoadingArtists] = useState(false);
+
+  // Load artists from API on component mount
+  useEffect(() => {
+    const fetchArtists = async () => {
+      setLoadingArtists(true);
+      try {
+        const response = await artistService.getAllArtists();
+        let artistsData: Artist[] = [];
+        
+        if (Array.isArray(response)) artistsData = response;
+        else if (response?.data) artistsData = response.data;
+        else if (response?.artists) artistsData = response.artists;
+        else if (response?.result) artistsData = response.result;
+        
+        const formattedArtists = artistsData.map((artist: any) => ({
+          id: artist.id || artist._id,
+          name: artist.name || '',
+          firstName: artist.firstName || '',
+          lastName: artist.lastName || '',
+          bio: artist.bio || '',
+          profilePictureUrl: artist.profilePictureUrl || '',
+          cover_photo: artist.cover_photo || '',
+          genre: artist.genre || '',
+          user: artist.user || ''
+        })).filter(artist => artist.id);
+        
+        setArtists(formattedArtists);
+      } catch (error) {
+        console.error('Error fetching artists:', error);
+        setError('Failed to load artists');
+      } finally {
+        setLoadingArtists(false);
+      }
+    };
+
+    fetchArtists();
+  }, []);
 
   useEffect(() => {
     const fetchGenres = async () => {
@@ -339,6 +377,17 @@ export default function AddArtistAdmin() {
   const selectedGenre = genres.find(genre => genre.id === formData.genre);
   const selectedUser = users.find(user => user.id === formData.user);
 
+  // Get genre and user names for display
+  const getGenreName = (genreId: string) => {
+    const genre = genres.find(g => g.id === genreId);
+    return genre ? genre.name : 'Unknown Genre';
+  };
+
+  const getUserName = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    return user ? user.name : 'Unknown User';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-red-100 flex">
       <div className="fixed left-0 top-0 h-full z-40">
@@ -369,7 +418,7 @@ export default function AddArtistAdmin() {
               )}
 
               {loading && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50">
                   <div className="bg-white rounded-2xl p-6 flex items-center gap-4">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                     <span className="text-gray-700">Processing...</span>
@@ -470,19 +519,18 @@ export default function AddArtistAdmin() {
                           <option value="">Select a genre</option>
                           {genres.map((genre) => (
                             <option key={genre.id} value={genre.id}>
-                              {genre.name} (ID: {genre.id})
+                              {genre.name}
                             </option>
                           ))}
                         </select>
                         {loadingGenres && <p className="text-gray-600 text-sm mt-2">Loading genres...</p>}
                         {errors.genre && <p className="text-red-600 text-sm mt-2">{errors.genre}</p>}
                         
-                        {/* Display selected genre details */}
+                        {/* Display selected genre details without ID */}
                         {selectedGenre && (
                           <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                             <p className="text-sm text-red-800 font-semibold">Selected Genre:</p>
-                            <p className="text-sm text-red-700">Name: {selectedGenre.name}</p>
-                            <p className="text-sm text-red-700">ID: {selectedGenre.id}</p>
+                            <p className="text-sm text-red-700">{selectedGenre.name}</p>
                           </div>
                         )}
                       </div>
@@ -493,20 +541,19 @@ export default function AddArtistAdmin() {
                           <option value="">Select a user</option>
                           {users.map((user) => (
                             <option key={user.id} value={user.id}>
-                              {user.name} - {user.email} (ID: {user.id})
+                              {user.name} - {user.email}
                             </option>
                           ))}
                         </select>
                         {loadingUsers && <p className="text-gray-600 text-sm mt-2">Loading users...</p>}
                         {errors.user && <p className="text-red-600 text-sm mt-2">{errors.user}</p>}
                         
-                        {/* Display selected user details */}
+                        {/* Display selected user details without ID */}
                         {selectedUser && (
                           <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                             <p className="text-sm text-red-800 font-semibold">Selected User:</p>
                             <p className="text-sm text-red-700">Name: {selectedUser.name}</p>
                             <p className="text-sm text-red-700">Email: {selectedUser.email}</p>
-                            <p className="text-sm text-red-700">ID: {selectedUser.id}</p>
                           </div>
                         )}
                       </div>
@@ -521,9 +568,14 @@ export default function AddArtistAdmin() {
                 </div>
               )}
 
-              {artists.length > 0 && (
+              {loadingArtists ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+                  <span className="ml-4 text-gray-700 text-lg">Loading artists...</span>
+                </div>
+              ) : artists.length > 0 ? (
                 <div className="space-y-6">
-                  <h3 className="text-xl lg:text-2xl font-bold text-red-800 mb-4">Added Artists</h3>
+                  <h3 className="text-xl lg:text-2xl font-bold text-red-800 mb-4">Added Artists ({artists.length})</h3>
                   {artists.map(artist => (
                     <div key={artist.id} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 lg:p-6 border border-red-100">
                       <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
@@ -541,14 +593,11 @@ export default function AddArtistAdmin() {
                           <p className="text-gray-600 mb-3 line-clamp-2">{artist.bio}</p>
                           <div className="flex flex-wrap gap-2 text-sm text-gray-600">
                             <span className="bg-red-100 px-3 py-1 rounded-full">
-                              Genre: {genres.find(g => g.id === artist.genre)?.name || artist.genre} (ID: {artist.genre})
+                              Genre: {getGenreName(artist.genre)}
                             </span>
                             <span className="bg-red-100 px-3 py-1 rounded-full">
-                              User: {users.find(u => u.id === artist.user)?.name || artist.user} (ID: {artist.user})
+                              User: {getUserName(artist.user)}
                             </span>
-                          </div>
-                          <div className="mt-2 text-xs text-gray-500">
-                            <p>Artist ID: {artist.id}</p>
                           </div>
                         </div>
 
@@ -560,6 +609,19 @@ export default function AddArtistAdmin() {
                     </div>
                   ))}
                 </div>
+              ) : (
+                !showForm && (
+                  <div className="text-center py-12">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-red-100">
+                      <User className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-bold text-red-800 mb-2">No Artists Added Yet</h3>
+                      <p className="text-gray-600 mb-6">Start by adding your first artist using the button above.</p>
+                      <button onClick={() => setShowForm(true)} className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg">
+                        + Add Your First Artist
+                      </button>
+                    </div>
+                  </div>
+                )
               )}
             </div>
           </div>
