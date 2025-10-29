@@ -25,6 +25,7 @@ export interface Album {
 }
 
 export interface FormData {
+  artist_name: any;
   genre_id: string | number | readonly string[] | undefined;
   title: string;
   artist: string;

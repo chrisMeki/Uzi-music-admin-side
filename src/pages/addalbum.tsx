@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Award, Calendar, Clock, Music, Plus, Star, Edit, Trash2, Menu, X } from 'lucide-react';
 import Sidebar from '../components/sidebar';
 import albumService from '../services/addalbum_service';
-import AlbumForm from '../components/formmodal';
+import AlbumForm from '../components/albumform';
 import defaultCover from '../assets/default.jpeg'; 
 
 interface Artist {
