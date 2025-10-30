@@ -23,6 +23,8 @@ interface Artist {
   cover_photo: string;
   genre: string;
   user: string;
+  genreName?: string;
+  userEmail?: string;
 }
 
 interface FormData {
@@ -49,7 +51,7 @@ interface User {
 
 export default function AddArtistAdmin() {
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [showForm, setShowForm] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -100,7 +102,9 @@ export default function AddArtistAdmin() {
           profilePictureUrl: artist.profilePictureUrl || '',
           cover_photo: artist.cover_photo || '',
           genre: artist.genre || '',
-          user: artist.user || ''
+          user: artist.user || '',
+          genreName: artist.genreName || '',
+          userEmail: artist.userEmail || ''
         })).filter(artist => artist.id);
         
         setArtists(formattedArtists);
@@ -158,9 +162,9 @@ export default function AddArtistAdmin() {
         
         const formattedUsers = usersData.map((user: any) => ({
           id: user.id?.toString() || user._id?.toString(),
-          name: user.name || user.username || 'User',
+          name: user.name || user.username || '',
           email: user.email || 'No email'
-        })).filter(user => user.id && user.name);
+        })).filter(user => user.id && user.email);
         
         setUsers(formattedUsers);
       } catch (error) {
@@ -173,6 +177,20 @@ export default function AddArtistAdmin() {
 
     fetchUsers();
   }, []);
+
+  // Function to get genre name for display
+  const getGenreName = (genreId: string) => {
+    if (!genreId) return 'No Genre';
+    const genre = genres.find(g => g.id === genreId);
+    return genre ? genre.name : 'No Genre';
+  };
+
+  // Function to get user email for display
+  const getUserEmail = (userId: string) => {
+    if (!userId) return 'No User';
+    const user = users.find(u => u.id === userId);
+    return user ? user.email : 'No User';
+  };
 
   const uploadImageToSupabase = async (file: File, folder: string): Promise<string> => {
     const fileExt = file.name.split('.').pop();
@@ -265,7 +283,12 @@ export default function AddArtistAdmin() {
       };
 
       const response = await artistService.create(artistData);
-      const newArtist: Artist = { ...artistData, id: response.id || Date.now() };
+      const newArtist: Artist = { 
+        ...artistData, 
+        id: response.id || Date.now(),
+        genreName: getGenreName(formData.genre),
+        userEmail: getUserEmail(formData.user)
+      };
       
       setArtists(prev => [...prev, newArtist]);
       resetForm();
@@ -339,7 +362,12 @@ export default function AddArtistAdmin() {
 
       await artistService.updateArtist(editingId!.toString(), updateData);
       setArtists(prev => prev.map(artist => 
-        artist.id === editingId ? { ...updateData, id: editingId! } : artist
+        artist.id === editingId ? { 
+          ...updateData, 
+          id: editingId!,
+          genreName: getGenreName(formData.genre),
+          userEmail: getUserEmail(formData.user)
+        } : artist
       ));
       
       setShowUpdateModal(false);
@@ -373,19 +401,14 @@ export default function AddArtistAdmin() {
     }
   };
 
-  // Get selected genre and user details
-  const selectedGenre = genres.find(genre => genre.id === formData.genre);
-  const selectedUser = users.find(user => user.id === formData.user);
-
-  // Get genre and user names for display
-  const getGenreName = (genreId: string) => {
-    const genre = genres.find(g => g.id === genreId);
-    return genre ? genre.name : 'Unknown Genre';
+  const handleAddNewArtistClick = () => {
+    resetForm();
+    setShowForm(true);
   };
 
-  const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user ? user.name : 'Unknown User';
+  const handleCloseForm = () => {
+    resetForm();
+    setShowForm(false);
   };
 
   return (
@@ -426,9 +449,13 @@ export default function AddArtistAdmin() {
                 </div>
               )}
 
+              {/* Always show the Add New Artist button at the top */}
               {!showForm && (
                 <div className="mb-8 flex justify-center">
-                  <button onClick={() => setShowForm(true)} className="px-8 py-4 bg-gradient-to-r from-red-500 to-red-600 text-white text-lg font-bold rounded-2xl shadow-xl hover:from-red-600 hover:to-red-700 transition-all transform hover:scale-105">
+                  <button 
+                    onClick={handleAddNewArtistClick} 
+                    className="px-8 py-4 bg-gradient-to-r from-red-500 to-red-600 text-white text-lg font-bold rounded-2xl shadow-xl hover:from-red-600 hover:to-red-700 transition-all transform hover:scale-105"
+                  >
                     + Add New Artist
                   </button>
                 </div>
@@ -440,14 +467,13 @@ export default function AddArtistAdmin() {
                     <h2 className="text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-800">
                       {editingId ? 'Edit Artist' : 'Add New Artist'}
                     </h2>
-                    {artists.length > 0 && (
-                      <button onClick={() => { resetForm(); setShowForm(false); }} className="text-gray-500 hover:text-red-600 transition-colors">
-                        <X className="w-6 h-6" />
-                      </button>
-                    )}
+                    <button onClick={handleCloseForm} className="text-gray-500 hover:text-red-600 transition-colors">
+                      <X className="w-6 h-6" />
+                    </button>
                   </div>
 
                   <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
+                    {/* Form fields remain the same */}
                     <div>
                       <label className="block text-sm font-bold text-red-700 uppercase tracking-wide mb-3">Artist Name *</label>
                       <input type="text" value={formData.name} onChange={(e) => handleInputChange('name', e.target.value)} className={`w-full px-4 lg:px-6 py-3 lg:py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-4 focus:ring-red-200 transition-all ${errors.name ? 'border-red-500 bg-red-50' : 'border-red-200'}`} placeholder="e.g., Winky D" />
@@ -525,14 +551,6 @@ export default function AddArtistAdmin() {
                         </select>
                         {loadingGenres && <p className="text-gray-600 text-sm mt-2">Loading genres...</p>}
                         {errors.genre && <p className="text-red-600 text-sm mt-2">{errors.genre}</p>}
-                        
-                        {/* Display selected genre details without ID */}
-                        {selectedGenre && (
-                          <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <p className="text-sm text-red-800 font-semibold">Selected Genre:</p>
-                            <p className="text-sm text-red-700">{selectedGenre.name}</p>
-                          </div>
-                        )}
                       </div>
 
                       <div>
@@ -541,21 +559,12 @@ export default function AddArtistAdmin() {
                           <option value="">Select a user</option>
                           {users.map((user) => (
                             <option key={user.id} value={user.id}>
-                              {user.name} - {user.email}
+                              {user.name ? `${user.name} - ${user.email}` : user.email}
                             </option>
                           ))}
                         </select>
                         {loadingUsers && <p className="text-gray-600 text-sm mt-2">Loading users...</p>}
                         {errors.user && <p className="text-red-600 text-sm mt-2">{errors.user}</p>}
-                        
-                        {/* Display selected user details without ID */}
-                        {selectedUser && (
-                          <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <p className="text-sm text-red-800 font-semibold">Selected User:</p>
-                            <p className="text-sm text-red-700">Name: {selectedUser.name}</p>
-                            <p className="text-sm text-red-700">Email: {selectedUser.email}</p>
-                          </div>
-                        )}
                       </div>
                     </div>
 
@@ -568,60 +577,65 @@ export default function AddArtistAdmin() {
                 </div>
               )}
 
-              {loadingArtists ? (
-                <div className="flex justify-center items-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-                  <span className="ml-4 text-gray-700 text-lg">Loading artists...</span>
-                </div>
-              ) : artists.length > 0 ? (
-                <div className="space-y-6">
-                  <h3 className="text-xl lg:text-2xl font-bold text-red-800 mb-4">Added Artists ({artists.length})</h3>
-                  {artists.map(artist => (
-                    <div key={artist.id} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 lg:p-6 border border-red-100">
-                      <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
-                        {artist.profilePictureUrl ? (
-                          <img src={artist.profilePictureUrl} alt={artist.name} className="w-20 h-20 lg:w-24 lg:h-24 rounded-xl object-cover border-2 border-red-200 flex-shrink-0" />
-                        ) : (
-                          <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center flex-shrink-0">
-                            <User className="w-8 h-8 lg:w-12 lg:h-12 text-red-600" />
-                          </div>
-                        )}
+              {/* Show artist list only when form is NOT open */}
+              {!showForm && (
+                <>
+                  {loadingArtists ? (
+                    <div className="flex justify-center items-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+                      <span className="ml-4 text-gray-700 text-lg">Loading artists...</span>
+                    </div>
+                  ) : artists.length > 0 ? (
+                    <div className="space-y-6">
+                      <h3 className="text-xl lg:text-2xl font-bold text-red-800 mb-4">Added Artists ({artists.length})</h3>
+                      {artists.map(artist => (
+                        <div key={artist.id} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 lg:p-6 border border-red-100">
+                          <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
+                            {artist.profilePictureUrl ? (
+                              <img src={artist.profilePictureUrl} alt={artist.name} className="w-20 h-20 lg:w-24 lg:h-24 rounded-xl object-cover border-2 border-red-200 flex-shrink-0" />
+                            ) : (
+                              <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center flex-shrink-0">
+                                <User className="w-8 h-8 lg:w-12 lg:h-12 text-red-600" />
+                              </div>
+                            )}
 
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xl lg:text-2xl font-bold text-red-800 mb-2 truncate">{artist.name}</h4>
-                          <p className="text-gray-700 mb-2"><span className="font-semibold">Name:</span> {artist.firstName} {artist.lastName}</p>
-                          <p className="text-gray-600 mb-3 line-clamp-2">{artist.bio}</p>
-                          <div className="flex flex-wrap gap-2 text-sm text-gray-600">
-                            <span className="bg-red-100 px-3 py-1 rounded-full">
-                              Genre: {getGenreName(artist.genre)}
-                            </span>
-                            <span className="bg-red-100 px-3 py-1 rounded-full">
-                              User: {getUserName(artist.user)}
-                            </span>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-xl lg:text-2xl font-bold text-red-800 mb-2 truncate">{artist.name}</h4>
+                              <p className="text-gray-700 mb-2"><span className="font-semibold">Name:</span> {artist.firstName} {artist.lastName}</p>
+                              <p className="text-gray-600 mb-3 line-clamp-2">{artist.bio}</p>
+                              <div className="flex flex-wrap gap-2 text-sm text-gray-600">
+                                <span className="bg-red-100 px-3 py-1 rounded-full">
+                                  {/* Display stored genre name or get it from genres list */}
+                                  Genre: {artist.genreName || getGenreName(artist.genre)}
+                                </span>
+                                <span className="bg-red-100 px-3 py-1 rounded-full">
+                                  {/* Display stored user email or get it from users list */}
+                                  User: {artist.userEmail || getUserEmail(artist.user)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-row sm:flex-col gap-2 flex-shrink-0">
+                              <button onClick={() => handleEditClick(artist)} disabled={loading} className="px-4 lg:px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg text-sm lg:text-base disabled:opacity-50">Update</button>
+                              <button onClick={() => handleDeleteClick(artist)} disabled={loading} className="px-4 lg:px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg text-sm lg:text-base disabled:opacity-50">Delete</button>
+                            </div>
                           </div>
                         </div>
-
-                        <div className="flex flex-row sm:flex-col gap-2 flex-shrink-0">
-                          <button onClick={() => handleEditClick(artist)} disabled={loading} className="px-4 lg:px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg text-sm lg:text-base disabled:opacity-50">Update</button>
-                          <button onClick={() => handleDeleteClick(artist)} disabled={loading} className="px-4 lg:px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg text-sm lg:text-base disabled:opacity-50">Delete</button>
-                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-red-100">
+                        <User className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-red-800 mb-2">No Artists Added Yet</h3>
+                        <p className="text-gray-600 mb-6">Start by adding your first artist using the button above.</p>
+                        <button onClick={handleAddNewArtistClick} className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg">
+                          + Add Your First Artist
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                !showForm && (
-                  <div className="text-center py-12">
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-red-100">
-                      <User className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold text-red-800 mb-2">No Artists Added Yet</h3>
-                      <p className="text-gray-600 mb-6">Start by adding your first artist using the button above.</p>
-                      <button onClick={() => setShowForm(true)} className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg">
-                        + Add Your First Artist
-                      </button>
-                    </div>
-                  </div>
-                )
+                  )}
+                </>
               )}
             </div>
           </div>

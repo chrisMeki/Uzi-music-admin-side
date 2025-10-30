@@ -25,7 +25,7 @@ interface Album {
   description?: string;
   cover_art?: string;
   release_date?: string;
-  genre?: string;
+  genre?: string | { _id: string; name: string }; // Allow both string and object
   track_count: number;
   duration: number;
   is_published: boolean;
@@ -103,17 +103,46 @@ export default function AlbumManager() {
     setIsFormOpen(true);
   };
 
+  // Helper function to normalize album data before sending to API
+  const normalizeAlbumData = (albumData: Album): any => {
+    const normalized: any = { ...albumData };
+    
+    // Remove id field if it exists (use _id for updates)
+    if (normalized.id) {
+      delete normalized.id;
+    }
+    
+    // Handle genre field - if it's a string, we might need to convert it to ObjectId
+    // or send it in a format the backend expects
+    if (typeof normalized.genre === 'string') {
+      // If your backend expects an ObjectId for genre, you might need to:
+      // 1. Look up the genre ID first, or
+      // 2. Send genre as a name and let backend handle it, or
+      // 3. Remove genre if it's not a valid ObjectId
+      // For now, we'll keep it as string and let the backend handle validation
+    }
+    
+    // Ensure artist is sent as ID if it's an object
+    if (normalized.artist && typeof normalized.artist === 'object' && '_id' in normalized.artist) {
+      normalized.artist = normalized.artist._id;
+    }
+    
+    return normalized;
+  };
+
   const handleFormSubmit = async (albumData: Album) => {
     try {
+      const normalizedData = normalizeAlbumData(albumData);
+      
       if (editingAlbum) {
         // Update existing album
-        const updatedAlbum = await albumService.updateAlbum(editingAlbum.id, albumData);
+        const updatedAlbum = await albumService.updateAlbum(editingAlbum.id, normalizedData);
         setAlbums(albums.map(album =>
           album.id === editingAlbum.id ? { ...updatedAlbum, id: editingAlbum.id } : album
         ));
       } else {
         // Create new album
-        const newAlbum = await albumService.createAlbum(albumData);
+        const newAlbum = await albumService.createAlbum(normalizedData);
         setAlbums([...albums, { ...newAlbum, id: newAlbum.id || newAlbum._id }]);
       }
       
@@ -122,13 +151,21 @@ export default function AlbumManager() {
       setError(null);
     } catch (error: any) {
       console.error("Error saving album:", error);
-      setError(error.response?.data?.message || error.message || "Failed to save album");
+      const errorMessage = error.response?.data?.message || error.message || "Failed to save album";
+      
+      // Handle specific genre error
+      if (errorMessage.includes('genre') && errorMessage.includes('ObjectId')) {
+        setError("Invalid genre format. Please select a valid genre from the list.");
+      } else {
+        setError(errorMessage);
+      }
     }
   };
 
   const handleFormClose = () => {
     setIsFormOpen(false);
     setEditingAlbum(null);
+    setError(null);
   };
 
   const formatDuration = (seconds: number): string => {
@@ -138,6 +175,12 @@ export default function AlbumManager() {
 
   const getArtistName = (artist: Artist | string): string =>
     typeof artist === "string" ? artist : artist?.name || "Unknown Artist";
+
+  const getGenreName = (genre: string | { _id: string; name: string } | undefined): string => {
+    if (!genre) return "Unknown Genre";
+    if (typeof genre === "string") return genre;
+    return genre.name || "Unknown Genre";
+  };
 
   // Fast image URL check - returns default immediately if no valid cover art
   const getCoverArt = (albumId: string, cover_art?: string): string => {
@@ -166,7 +209,15 @@ export default function AlbumManager() {
     if (error) {
       return (
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl">
-          {error}
+          <div className="flex justify-between items-start">
+            <span>{error}</span>
+            <button 
+              onClick={() => setError(null)}
+              className="text-red-700 hover:text-red-900 ml-4"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       );
     }
@@ -229,6 +280,15 @@ export default function AlbumManager() {
               <p className="text-gray-500 text-xs lg:text-sm line-clamp-2 mb-3">
                 {album.description || "No description available"}
               </p>
+
+              {/* Display genre if available */}
+              {album.genre && (
+                <div className="mb-2">
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    Genre: {getGenreName(album.genre)}
+                  </span>
+                </div>
+              )}
 
               {Array.isArray(album.plaqueArray) && album.plaqueArray.length > 0 && (
                 <div className="flex flex-wrap gap-1 lg:gap-2 mb-3">
@@ -360,10 +420,12 @@ export default function AlbumManager() {
               </button>
             </div>
 
+            {/* Fixed: Pass the editingAlbum state to AlbumForm */}
             {isFormOpen && (
               <AlbumForm
                 onSubmit={handleFormSubmit}
-                onClose={handleFormClose} editingAlbum={null}                
+                onClose={handleFormClose}
+                editingAlbum={editingAlbum as any} 
               />
             )}
 

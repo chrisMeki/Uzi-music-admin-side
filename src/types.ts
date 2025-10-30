@@ -5,6 +5,8 @@ export interface Plaque {
 }
 
 export interface Album {
+  genre_name: string;
+  _id: string;
   genre_id: string;
   id: string;                   
   title: string;                 

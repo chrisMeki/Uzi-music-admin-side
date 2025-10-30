@@ -36,7 +36,6 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
   const [plaqueArray, setPlaqueArray] = useState<Plaque[]>([]);
   const [currentPlaque, setCurrentPlaque] = useState<Plaque>({ plaque_type: '', plaque_image_url: '', plaque_price_range: "" });
   const [plaquePreviewImage, setPlaquePreviewImage] = useState<string | null>(null);
-  const [] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
   const [genres, setGenres] = useState<Genre[]>([]);
@@ -54,16 +53,39 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
 
   useEffect(() => {
     if (editingAlbum) {
-      const artistId = typeof editingAlbum.artist === 'string' ? editingAlbum.artist : (editingAlbum.artist as any)._id || '';
-      const artistName = typeof editingAlbum.artist === 'string' 
-        ? artists.find(a => a._id === artistId)?.name || ''
-        : (editingAlbum.artist as any).name || '';
+      console.log('Editing album data:', editingAlbum);
       
-      const genreId = editingAlbum.genre_id || '';
-      const genreName = editingAlbum.genre || '';
+      // Extract artist information
+      let artistId = '';
+      let artistName = '';
       
+      if (typeof editingAlbum.artist === 'string') {
+        artistId = editingAlbum.artist;
+        // Find artist name from artists list
+        const foundArtist = artists.find(a => a._id === artistId);
+        artistName = foundArtist?.name || '';
+      } else if (editingAlbum.artist && typeof editingAlbum.artist === 'object') {
+        artistId = (editingAlbum.artist as any)._id || '';
+        artistName = (editingAlbum.artist as any).name || '';
+      }
+
+      // Extract genre information - backend expects genre to be ID, not name
+      let genreId = '';
+      
+      if (typeof editingAlbum.genre === 'string') {
+        // Check if it's already an ID or a name
+        const foundGenre = genres.find(g => g._id === editingAlbum.genre || g.name === editingAlbum.genre);
+        if (foundGenre) {
+          genreId = foundGenre._id;
+        } else {
+          genreId = editingAlbum.genre;
+        }
+      } else if (editingAlbum.genre && typeof editingAlbum.genre === 'object') {
+        genreId = (editingAlbum.genre as any)._id || '';
+      }
+      
+      // Handle duration conversion
       let durationValue = '';
-      
       if (editingAlbum.duration) {
         if (editingAlbum.duration >= 60) {
           const minutes = Math.floor(editingAlbum.duration / 60);
@@ -76,12 +98,13 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
         }
       }
 
+      // Set form data
       setFormData({
         title: editingAlbum.title || '', 
         artist: artistId, 
         artist_name: artistName,
-        release_date: editingAlbum.release_date || '',
-        genre: genreName, 
+        release_date: editingAlbum.release_date ? editingAlbum.release_date.split('T')[0] : '', // Format for date input
+        genre: genreId, // Store the genre ID, not the name
         genre_id: genreId, 
         cover_art: editingAlbum.cover_art || '',
         description: editingAlbum.description || '', 
@@ -98,8 +121,10 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
       setPreviewImage(editingAlbum.cover_art || null);
       setPlaqueArray(editingAlbum.plaqueArray || []);
       setDurationInput(durationValue);
-    } else resetForm();
-  }, [editingAlbum, artists]);
+    } else {
+      resetForm();
+    }
+  }, [editingAlbum, artists, genres]);
 
   const loadGenres = async () => {
     setLoadingGenres(true);
@@ -138,21 +163,20 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     
-    if (name === 'artist_name') {
-      // Find artist by name and set both name and ID
-      const selectedArtist = artists.find(artist => artist.name === value);
+    if (name === 'artist') {
+      // Handle artist selection by ID
+      const selectedArtist = artists.find(artist => artist._id === value);
       setFormData({ 
         ...formData, 
-        artist: selectedArtist ? selectedArtist._id : '',
-        artist_name: value
+        artist: value,
+        artist_name: selectedArtist ? selectedArtist.name : ''
       });
     } else if (name === 'genre') {
-      // Find genre by name and set both name and ID
-      const selectedGenre = genres.find(genre => genre.name === value);
+      // Handle genre selection by ID - store only the ID
       setFormData({ 
         ...formData, 
-        genre_id: selectedGenre ? selectedGenre._id : '', 
-        genre: value 
+        genre: value, // Store the ID
+        genre_id: value
       });
     } else {
       setFormData({
@@ -171,8 +195,12 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
       if (value.includes(':')) {
         const [minutes, seconds] = value.split(':').map(Number);
         durationInSeconds = (minutes || 0) * 60 + (seconds || 0);
-      } else durationInSeconds = (Number(value) || 0) * 60;
-    } else durationInSeconds = Number(value) || 0;
+      } else {
+        durationInSeconds = (Number(value) || 0) * 60;
+      }
+    } else {
+      durationInSeconds = Number(value) || 0;
+    }
     setFormData({ ...formData, duration: durationInSeconds });
   };
 
@@ -184,8 +212,12 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
         const minutes = Math.floor(formData.duration / 60);
         const seconds = formData.duration % 60;
         setDurationInput(seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}`);
-      } else setDurationInput(formData.duration.toString());
-    } else setDurationInput('');
+      } else {
+        setDurationInput(formData.duration.toString());
+      }
+    } else {
+      setDurationInput('');
+    }
   };
 
   const handlePlaqueInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -262,15 +294,21 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
     setSubmitLoading(true);
     setError(null);
     try {
-      if (!formData.title || !formData.artist) throw new Error('Title and Artist are required');
+      if (!formData.title || !formData.artist) {
+        throw new Error('Title and Artist are required');
+      }
+
+      if (!formData.genre) {
+        throw new Error('Please select a genre');
+      }
       
       // Create the album data with proper structure for backend
-      const albumData = { 
+      // Backend expects genre to be an ObjectId, not a string name
+      const albumData: any = { 
         title: formData.title,
-        artist: formData.artist, // Send only the artist ID as string
+        artist: formData.artist, // Send the artist ID
         release_date: formData.release_date,
-        genre: formData.genre_id, // Send genre ID instead of genre name
-        genre_id: formData.genre_id,
+        genre: formData.genre, // Send genre ID (ObjectId), not the name
         cover_art: formData.cover_art,
         description: formData.description,
         track_count: formData.track_count,
@@ -281,16 +319,31 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
         duration: formData.duration,
         is_published: formData.is_published,
         is_featured: formData.is_featured,
-        plaqueArray: plaqueArray // Make sure this is included
+        plaqueArray: plaqueArray
       };
+
+      // If editing, include the album ID
+      if (editingAlbum) {
+        albumData.id = editingAlbum.id;
+        albumData._id = editingAlbum._id || editingAlbum.id;
+      }
       
       console.log('Submitting album data:', albumData);
+      console.log('Artist ID:', formData.artist);
+      console.log('Genre ID:', formData.genre);
       console.log('Plaques being submitted:', plaqueArray);
-      onSubmit(albumData as unknown as Album);
+      
+      onSubmit(albumData as Album);
     } catch (error: any) {
       setError(error.message || 'Failed to save album');
       setSubmitLoading(false);
     }
+  };
+
+  // Helper function to get genre name by ID
+  const getGenreNameById = (genreId: string) => {
+    const genre = genres.find(g => g._id === genreId);
+    return genre ? genre.name : '';
   };
 
   return (
@@ -306,6 +359,11 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
               <p className="text-slate-600">
                 {editingAlbum ? 'Update album information' : 'Add a new album to your collection'}
               </p>
+              {editingAlbum && (
+                <p className="text-sm text-slate-500 mt-1">
+                  Editing: <strong>{editingAlbum.title}</strong>
+                </p>
+              )}
             </div>
             <button 
               onClick={() => { onClose(); resetForm(); }} 
@@ -436,8 +494,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           Artist <span className="text-red-500">*</span>
                         </label>
                         <select 
-                          name="artist_name" 
-                          value={formData.artist_name} 
+                          name="artist" 
+                          value={formData.artist} 
                           onChange={handleInputChange} 
                           required 
                           disabled={loadingArtists || submitLoading}
@@ -445,41 +503,42 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                         >
                           <option value="">Select artist</option>
                           {artists.map(artist => (
-                            <option key={artist._id} value={artist.name}>
+                            <option key={artist._id} value={artist._id}>
                               {artist.name}
                             </option>
                           ))}
                         </select>
                         {formData.artist && (
-                          <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
-                            <p className="text-xs text-slate-600">
-                              <strong>Selected Artist:</strong><br />
-                              Name: {formData.artist_name}
+                          <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                            <p className="text-xs text-green-700">
+                              <strong>Selected Artist:</strong> {formData.artist_name}
                             </p>
                           </div>
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Genre</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Genre <span className="text-red-500">*</span>
+                        </label>
                         <select 
                           name="genre" 
                           value={formData.genre} 
                           onChange={handleInputChange} 
+                          required
                           disabled={loadingGenres || submitLoading}
                           className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none disabled:opacity-50"
                         >
                           <option value="">Select genre</option>
                           {genres.map(genre => (
-                            <option key={genre._id} value={genre.name}>
+                            <option key={genre._id} value={genre._id}>
                               {genre.name}
                             </option>
                           ))}
                         </select>
-                        {formData.genre_id && (
-                          <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
-                            <p className="text-xs text-slate-600">
-                              <strong>Selected Genre:</strong><br />
-                              Name: {formData.genre}
+                        {formData.genre && (
+                          <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                            <p className="text-xs text-green-700">
+                              <strong>Selected Genre:</strong> {getGenreNameById(formData.genre)}
                             </p>
                           </div>
                         )}
@@ -706,11 +765,6 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                               {capitalizePlaqueType(plaque.plaque_type)}
                             </p>
                             <p className="text-xs text-slate-600 truncate">{plaque.plaque_price_range}</p>
-                            {plaque.plaque_image_url && (
-                              <p className="text-xs text-slate-500 truncate mt-1">
-                                Image URL: {plaque.plaque_image_url.substring(0, 50)}...
-                              </p>
-                            )}
                           </div>
                           <button 
                             type="button" 
