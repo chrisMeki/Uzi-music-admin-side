@@ -6,6 +6,7 @@ import AddTracksScreen from "./pages/addtracks";
 import AddGenreScreen from "./pages/genre";
 import LoginScreen from "./pages/login";
 import CreateAccountScreen from "./pages/createaccount";
+import NewsManagement from "./pages/news";
 
 
 
@@ -20,6 +21,7 @@ function App() {
           <Route path="/albums" element={<AlbumManager/>} />
           <Route path="/tracks" element={<AddTracksScreen/>} />
           <Route path="/genre" element={<AddGenreScreen/>} />
+          <Route path="/news" element={<NewsManagement/>} />
           
           
         </Routes>

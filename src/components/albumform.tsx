@@ -37,7 +37,9 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
   const [currentPlaque, setCurrentPlaque] = useState<Plaque>({ plaque_type: '', plaque_image_url: '', plaque_price_range: "" });
   const [plaquePreviewImage, setPlaquePreviewImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
+  const [uploadingPlaque, setUploadingPlaque] = useState<boolean>(false);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loadingGenres, setLoadingGenres] = useState<boolean>(false);
@@ -242,7 +244,12 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
     const file = e.target.files?.[0];
     if (!file) return;
     
-    setUploading(true);
+    if (type === 'cover') {
+      setUploading(true);
+    } else {
+      setUploadingPlaque(true);
+    }
+    
     try {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -257,7 +264,11 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
     } catch (error: any) {
       setError(error.message || `Failed to upload ${type} image`);
     } finally {
-      setUploading(false);
+      if (type === 'cover') {
+        setUploading(false);
+      } else {
+        setUploadingPlaque(false);
+      }
     }
   };
 
@@ -286,6 +297,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
     setDurationInput('');
     setDurationUnit('seconds');
     setError(null);
+    setSuccess(null);
     setSubmitLoading(false);
   };
 
@@ -293,6 +305,8 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
     e.preventDefault();
     setSubmitLoading(true);
     setError(null);
+    setSuccess(null);
+    
     try {
       if (!formData.title || !formData.artist) {
         throw new Error('Title and Artist are required');
@@ -319,7 +333,11 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
         duration: formData.duration,
         is_published: formData.is_published,
         is_featured: formData.is_featured,
-        plaqueArray: plaqueArray
+        plaqueArray: plaqueArray.map(plaque => ({
+          plaque_type: plaque.plaque_type,
+          plaque_image_url: plaque.plaque_image_url,
+          plaque_price_range: plaque.plaque_price_range || ""
+        }))
       };
 
       // If editing, include the album ID
@@ -333,9 +351,25 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
       console.log('Genre ID:', formData.genre);
       console.log('Plaques being submitted:', plaqueArray);
       
-      onSubmit(albumData as Album);
+      // Call the onSubmit prop which should handle the API call
+      await onSubmit(albumData as Album);
+      
+      // If we reach here, the submission was successful
+      setSuccess(editingAlbum ? 'Album updated successfully!' : 'Album created successfully!');
+      
+      // Reset form after successful submission if not editing
+      if (!editingAlbum) {
+        setTimeout(() => {
+          resetForm();
+          onClose();
+        }, 1500);
+      } else {
+        setSubmitLoading(false);
+      }
+      
     } catch (error: any) {
-      setError(error.message || 'Failed to save album');
+      console.error('Error in form submission:', error);
+      setError(error.message || 'Failed to save album. Please check the console for details.');
       setSubmitLoading(false);
     }
   };
@@ -376,7 +410,19 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-lg">
-              {error}
+              <div className="flex items-center">
+                <X className="w-5 h-5 mr-2" />
+                {error}
+              </div>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-lg">
+              <div className="flex items-center">
+                <CheckCircle className="w-5 h-5 mr-2" />
+                {success}
+              </div>
             </div>
           )}
 
@@ -689,7 +735,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           name="plaque_type" 
                           value={currentPlaque.plaque_type} 
                           onChange={handlePlaqueInputChange}
-                          disabled={submitLoading}
+                          disabled={submitLoading || uploadingPlaque}
                           className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm disabled:opacity-50"
                         >
                           <option value="">Select plaque type</option>
@@ -706,7 +752,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           name="plaque_price_range" 
                           value={currentPlaque.plaque_price_range} 
                           onChange={handlePlaqueInputChange}
-                          disabled={submitLoading}
+                          disabled={submitLoading || uploadingPlaque}
                           className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm disabled:opacity-50"
                           placeholder="Price range" 
                         />
@@ -718,13 +764,13 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                           onChange={(e) => handleImageUpload(e, 'plaque')} 
                           className="hidden" 
                           id="plaque-upload" 
-                          disabled={uploading || submitLoading} 
+                          disabled={uploadingPlaque || submitLoading} 
                         />
                         <label 
                           htmlFor="plaque-upload" 
-                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors text-sm ${(uploading || submitLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors text-sm ${(uploadingPlaque || submitLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          {uploading ? (
+                          {uploadingPlaque ? (
                             <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
                           ) : plaquePreviewImage ? (
                             <><CheckCircle className="w-4 h-4 text-green-600" /> Image Added</>
@@ -737,7 +783,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
                     <button 
                       type="button" 
                       onClick={addPlaque} 
-                      disabled={!currentPlaque.plaque_type || !currentPlaque.plaque_image_url || uploading || submitLoading}
+                      disabled={!currentPlaque.plaque_type || !currentPlaque.plaque_image_url || uploadingPlaque || submitLoading}
                       className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
                     >
                       <Plus className="w-4 h-4" /> Add Plaque
@@ -786,13 +832,11 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
             <div className="flex gap-3 pt-4 border-t border-slate-200">
               <button 
                 type="submit" 
-                disabled={submitLoading || uploading}
+                disabled={submitLoading || uploading || uploadingPlaque}
                 className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-lg font-semibold transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {submitLoading ? (
                   <><Loader2 className="w-5 h-5 animate-spin" /> {editingAlbum ? 'Updating Album...' : 'Creating Album...'}</>
-                ) : uploading ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> Uploading Image...</>
                 ) : (
                   editingAlbum ? 'Update Album' : 'Create Album'
                 )}
@@ -800,7 +844,7 @@ export default function AlbumForm({ editingAlbum, onSubmit, onClose }: AlbumForm
               <button 
                 type="button" 
                 onClick={() => { onClose(); resetForm(); }} 
-                disabled={submitLoading || uploading}
+                disabled={submitLoading || uploading || uploadingPlaque}
                 className="px-6 py-3 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-semibold transition-colors disabled:opacity-50"
               >
                 Cancel

@@ -25,7 +25,7 @@ interface Album {
   description?: string;
   cover_art?: string;
   release_date?: string;
-  genre?: string | { _id: string; name: string }; // Allow both string and object
+  genre?: string | { _id: string; name: string };
   track_count: number;
   duration: number;
   is_published: boolean;
@@ -70,7 +70,6 @@ export default function AlbumManager() {
         return;
       }
 
-      // ✅ Normalize album IDs
       albumsData = albumsData.map((album: any) => ({
         ...album,
         id: album.id || album._id
@@ -103,29 +102,37 @@ export default function AlbumManager() {
     setIsFormOpen(true);
   };
 
-  // Helper function to normalize album data before sending to API
+  // Improved normalization function
   const normalizeAlbumData = (albumData: Album): any => {
     const normalized: any = { ...albumData };
     
-    // Remove id field if it exists (use _id for updates)
+    // Remove frontend-only fields
     if (normalized.id) {
       delete normalized.id;
     }
     
-    // Handle genre field - if it's a string, we might need to convert it to ObjectId
-    // or send it in a format the backend expects
-    if (typeof normalized.genre === 'string') {
-      // If your backend expects an ObjectId for genre, you might need to:
-      // 1. Look up the genre ID first, or
-      // 2. Send genre as a name and let backend handle it, or
-      // 3. Remove genre if it's not a valid ObjectId
-      // For now, we'll keep it as string and let the backend handle validation
-    }
-    
-    // Ensure artist is sent as ID if it's an object
+    // Handle artist field
     if (normalized.artist && typeof normalized.artist === 'object' && '_id' in normalized.artist) {
       normalized.artist = normalized.artist._id;
     }
+    
+    // Handle genre field - ensure it's sent as ID only
+    if (normalized.genre && typeof normalized.genre === 'object' && '_id' in normalized.genre) {
+      normalized.genre = normalized.genre._id;
+    }
+    
+    // Ensure plaqueArray is properly formatted
+    if (normalized.plaqueArray && !Array.isArray(normalized.plaqueArray)) {
+      normalized.plaqueArray = [];
+    }
+    
+    // Convert empty strings to undefined for optional fields
+    const optionalFields = ['description', 'cover_art', 'copyright_info', 'credits', 'affiliation', 'publisher'];
+    optionalFields.forEach(field => {
+      if (normalized[field] === '') {
+        normalized[field] = undefined;
+      }
+    });
     
     return normalized;
   };
@@ -134,31 +141,63 @@ export default function AlbumManager() {
     try {
       const normalizedData = normalizeAlbumData(albumData);
       
+      let result;
       if (editingAlbum) {
-        // Update existing album
-        const updatedAlbum = await albumService.updateAlbum(editingAlbum.id, normalizedData);
+        result = await albumService.updateAlbum(editingAlbum.id, normalizedData);
+      } else {
+        result = await albumService.createAlbum(normalizedData);
+      }
+
+      // Handle different response formats
+      const updatedAlbum = result.data || result.album || result;
+      
+      if (!updatedAlbum) {
+        throw new Error("No album data returned from server");
+      }
+
+      if (editingAlbum) {
         setAlbums(albums.map(album =>
           album.id === editingAlbum.id ? { ...updatedAlbum, id: editingAlbum.id } : album
         ));
       } else {
-        // Create new album
-        const newAlbum = await albumService.createAlbum(normalizedData);
-        setAlbums([...albums, { ...newAlbum, id: newAlbum.id || newAlbum._id }]);
+        setAlbums([...albums, { ...updatedAlbum, id: updatedAlbum.id || updatedAlbum._id }]);
       }
       
       setIsFormOpen(false);
       setEditingAlbum(null);
       setError(null);
+      
+      // Refresh the list to ensure we have the latest data with populated fields
+      setTimeout(() => {
+        fetchAlbums();
+      }, 100);
+      
     } catch (error: any) {
       console.error("Error saving album:", error);
-      const errorMessage = error.response?.data?.message || error.message || "Failed to save album";
       
-      // Handle specific genre error
-      if (errorMessage.includes('genre') && errorMessage.includes('ObjectId')) {
-        setError("Invalid genre format. Please select a valid genre from the list.");
-      } else {
-        setError(errorMessage);
+      let errorMessage = "Failed to save album. Please try again.";
+      
+      if (error.response?.data) {
+        const serverError = error.response.data;
+        
+        if (serverError.message) {
+          errorMessage = serverError.message;
+        }
+        
+        if (serverError.error && serverError.error.includes('populate')) {
+          errorMessage = "Server error: Please contact administrator. (Database population issue)";
+        }
+        
+        // Handle validation errors
+        if (serverError.errors) {
+          const validationErrors = Object.values(serverError.errors).map((err: any) => err.message);
+          errorMessage = `Validation errors: ${validationErrors.join(', ')}`;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
       }
+      
+      setError(errorMessage);
     }
   };
 
@@ -182,9 +221,7 @@ export default function AlbumManager() {
     return genre.name || "Unknown Genre";
   };
 
-  // Fast image URL check - returns default immediately if no valid cover art
   const getCoverArt = (albumId: string, cover_art?: string): string => {
-    // Immediate return if no cover art or if we know this image has errored
     if (!cover_art || cover_art.trim() === '' || imageErrors.has(albumId)) {
       return defaultCover;
     }
@@ -192,7 +229,6 @@ export default function AlbumManager() {
   };
 
   const handleImageError = (albumId: string) => {
-    // Add to error set for fast fallback on re-renders
     setImageErrors(prev => new Set(prev).add(albumId));
   };
 
@@ -210,14 +246,27 @@ export default function AlbumManager() {
       return (
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl">
           <div className="flex justify-between items-start">
-            <span>{error}</span>
+            <div className="flex-1">
+              <span className="font-semibold">Error: </span>
+              <span>{error}</span>
+            </div>
             <button 
               onClick={() => setError(null)}
-              className="text-red-700 hover:text-red-900 ml-4"
+              className="text-red-700 hover:text-red-900 ml-4 flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
+          {error.includes('contact administrator') && (
+            <div className="mt-2 text-sm">
+              <button 
+                onClick={fetchAlbums}
+                className="text-red-600 hover:text-red-800 underline"
+              >
+                Try refreshing the page
+              </button>
+            </div>
+          )}
         </div>
       );
     }
@@ -281,7 +330,6 @@ export default function AlbumManager() {
                 {album.description || "No description available"}
               </p>
 
-              {/* Display genre if available */}
               {album.genre && (
                 <div className="mb-2">
                   <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
@@ -378,7 +426,7 @@ export default function AlbumManager() {
             <Music className="w-7 h-7 text-red-600" />
             <span className="font-bold text-lg">Albums</span>
           </div>
-          <div className="w-10"></div> {/* Spacer for balance */}
+          <div className="w-10"></div>
         </div>
       </div>
 
@@ -420,7 +468,6 @@ export default function AlbumManager() {
               </button>
             </div>
 
-            {/* Fixed: Pass the editingAlbum state to AlbumForm */}
             {isFormOpen && (
               <AlbumForm
                 onSubmit={handleFormSubmit}

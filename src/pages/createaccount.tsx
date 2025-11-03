@@ -38,8 +38,8 @@ export default function CreateAccountScreen() {
       return false;
     }
 
-    if (formData.password.length < 3) {
-      setError('Password must be at least 3 characters long');
+    if (formData.password.length < 4) {
+      setError('Password must be at least 4 characters long.');
       return false;
     }
 
@@ -176,9 +176,9 @@ export default function CreateAccountScreen() {
                   value={formData.password}
                   onChange={handleChange}
                   className="w-full px-5 py-4 text-lg border-2 border-red-300 rounded-lg focus:outline-none focus:border-red-500 transition-colors bg-gray-50 pr-12"
-                  placeholder="Create a password (min. 3 characters)"
+                  placeholder="Create a password (min. 4 characters)"
                   disabled={isLoading}
-                  minLength={3}
+                  minLength={4}
                 />
                 <button
                   type="button"

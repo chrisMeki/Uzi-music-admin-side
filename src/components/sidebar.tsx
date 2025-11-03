@@ -4,6 +4,7 @@ import {
   Music,
   Tag,
   Music2,
+  Newspaper,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import logo from "../assets/logo.jpg";
@@ -13,6 +14,8 @@ const Sidebar = ({ isOpen = true, onClose = () => {} }) => {
     { icon: UserPlus, label: "Add Artist", path: "/artist" },
     { icon: Disc3, label: "Add Albums", path: "/albums" },
     { icon: Music, label: "Add Tracks", path: "/tracks" },
+    { icon: Newspaper, label: "News", path: "/news" },
+
     { icon: Tag, label: "Add Genre", path: "/genre" },
   ];
 
